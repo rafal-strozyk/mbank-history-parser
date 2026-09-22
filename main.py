@@ -194,7 +194,8 @@ def write_month_sheet(
     transactions: list[list[str]],
     column_indexes: TransactionColumnIndexes,
 ) -> None:
-    costs, returns = split_transactions_by_amount(transactions, column_indexes)
+    sorted_transactions = sort_transactions_by_date(transactions, column_indexes)
+    costs, returns = split_transactions_by_amount(sorted_transactions, column_indexes)
     write_summary(sheet, "sum costs", costs, column_indexes, COSTS_TABLE_START_COLUMN)
     write_summary(sheet, "sum returns", returns, column_indexes, RETURNS_TABLE_START_COLUMN)
     write_transaction_table(
@@ -230,6 +231,16 @@ def write_summary(
         row=SUMMARY_AMOUNT_ROW,
         column=start_column,
         value=format_amount(sum_transactions(transactions, column_indexes)),
+    )
+
+
+def sort_transactions_by_date(
+    transactions: list[list[str]],
+    column_indexes: TransactionColumnIndexes,
+) -> list[list[str]]:
+    return sorted(
+        transactions,
+        key=lambda transaction: date.fromisoformat(transaction[column_indexes.date]),
     )
 
 
