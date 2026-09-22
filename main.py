@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import re
 from collections import OrderedDict
 from dataclasses import dataclass
 from datetime import date
@@ -14,6 +15,7 @@ from openpyxl.styles import Font
 
 ENCODINGS_TO_TRY = ("utf-8-sig", "utf-8", "cp1250", "iso-8859-2")
 CSV_SNIFF_SAMPLE_SIZE = 4096
+REPEATED_WHITESPACE_PATTERN = re.compile(r"\s+")
 LAST_COLUMN_INDEX = -1
 DATE_HEADER = "#Data operacji"
 NAME_HEADER = "#Opis operacji"
@@ -254,7 +256,7 @@ def write_transaction_table(
         sheet.cell(
             row=current_row,
             column=start_column + OUTPUT_NAME_COLUMN_OFFSET,
-            value=transaction[column_indexes.name],
+            value=format_transaction_name(transaction[column_indexes.name]),
         )
         sheet.cell(
             row=current_row,
@@ -315,6 +317,10 @@ def format_amount(amount: Decimal) -> str:
 
 def format_date(transaction_date: str) -> str:
     return date.fromisoformat(transaction_date).strftime("%d.%m.%Y")
+
+
+def format_transaction_name(transaction_name: str) -> str:
+    return REPEATED_WHITESPACE_PATTERN.sub(" ", transaction_name).strip()
 
 
 def group_transactions_by_month(
