@@ -300,6 +300,19 @@ def output_file_for(input_file: Path) -> Path:
     return input_file.with_name(f"{input_file.stem}_parsed.xlsx")
 
 
+def show_error_dialog(title: str, message: str) -> None:
+    root = Tk()
+    root.withdraw()
+    messagebox.showerror(
+        title=title,
+        message="The selected file cannot be parsed.",
+        icon="error",
+        detail=message,
+        parent=root,
+    )
+    root.destroy()
+
+
 def main() -> None:
     input_file = select_input_file()
 
@@ -312,7 +325,7 @@ def main() -> None:
         output_file = output_file_for(input_file)
         write_xlsx(rows, output_file)
     except CsvFormatError as error:
-        messagebox.showerror("Invalid mBank CSV", str(error))
+        show_error_dialog("Invalid mBank CSV", str(error))
         return
 
     print(f"Selected file: {input_file}")
