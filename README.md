@@ -17,6 +17,38 @@ the target Google Sheet workflow.
 3. Generate a spreadsheet-friendly output file.
 4. Copy the resulting rows into Google Sheets.
 
+## Development setup
+
+Create a Python 3.14.4 virtual environment with `uv`:
+
+```bash
+uv venv --python 3.14.4
+```
+
+Activate it:
+
+```bash
+source .venv/bin/activate
+```
+
+Confirm that Python is running from the virtual environment:
+
+```bash
+which python
+python --version
+```
+
+## Usage
+
+Run the parser:
+
+```bash
+python main.py
+```
+
+For now, this opens a system file picker where you can select the mBank CSV file
+to process. Parsing and output generation will be added next.
+
 ## Status
 
 Early project setup. Requirements and output format will be refined as the
