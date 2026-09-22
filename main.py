@@ -2,18 +2,37 @@ from __future__ import annotations
 
 import csv
 from collections import OrderedDict
+from dataclasses import dataclass
 from datetime import date
+from decimal import Decimal
 from pathlib import Path
-from tkinter import Tk, filedialog
+from tkinter import Tk, filedialog, messagebox
 
 from openpyxl import Workbook
+from openpyxl.styles import Font
 
 
 ENCODINGS_TO_TRY = ("utf-8-sig", "utf-8", "cp1250", "iso-8859-2")
 CSV_SNIFF_SAMPLE_SIZE = 4096
-FIRST_COLUMN_INDEX = 0
 LAST_COLUMN_INDEX = -1
-TRANSACTION_HEADER_FIRST_COLUMN = "#Data operacji"
+DATE_HEADER = "#Data operacji"
+NAME_HEADER = "#Opis operacji"
+ACCOUNT_HEADER = "#Rachunek"
+CATEGORY_HEADER = "#Kategoria"
+AMOUNT_HEADER = "#Kwota"
+REQUIRED_TRANSACTION_HEADERS = (
+    DATE_HEADER,
+    NAME_HEADER,
+    ACCOUNT_HEADER,
+    CATEGORY_HEADER,
+    AMOUNT_HEADER,
+)
+OUTPUT_TABLE_HEADER = ["date", "name", "amount"]
+COSTS_TABLE_TITLE = "costs"
+RETURNS_TABLE_TITLE = "returns"
+OUTPUT_DATE_COLUMN = 1
+OUTPUT_NAME_COLUMN = 2
+OUTPUT_AMOUNT_COLUMN = 3
 POLISH_MONTH_NAMES = {
     1: "Styczeń",
     2: "Luty",
@@ -28,6 +47,17 @@ POLISH_MONTH_NAMES = {
     11: "Listopad",
     12: "Grudzień",
 }
+
+
+class CsvFormatError(Exception):
+    pass
+
+
+@dataclass(frozen=True)
+class TransactionColumnIndexes:
+    date: int
+    name: int
+    amount: int
 
 
 def select_input_file() -> Path | None:
@@ -83,7 +113,7 @@ def extract_transaction_rows(csv_rows: list[list[str]]) -> list[list[str]]:
 
         if is_transaction_header_row(cleaned_row):
             return [
-                clean_transaction_header(cleaned_row),
+                cleaned_row,
                 *[
                     transaction_row
                     for source_row in csv_rows[row_index + 1 :]
@@ -91,7 +121,10 @@ def extract_transaction_rows(csv_rows: list[list[str]]) -> list[list[str]]:
                 ],
             ]
 
-    return [clean_row(row) for row in csv_rows if clean_row(row)]
+    raise CsvFormatError(
+        "Could not find the mBank transaction table header.\n\n"
+        f"Expected header row:\n{';'.join(REQUIRED_TRANSACTION_HEADERS)}"
+    )
 
 
 def clean_row(row: list[str]) -> list[str]:
@@ -103,7 +136,7 @@ def clean_row(row: list[str]) -> list[str]:
 
 
 def is_transaction_header_row(row: list[str]) -> bool:
-    return bool(row) and row[FIRST_COLUMN_INDEX] == TRANSACTION_HEADER_FIRST_COLUMN
+    return DATE_HEADER in row
 
 
 def remove_trailing_empty_cells(row: list[str]) -> None:
@@ -111,42 +144,155 @@ def remove_trailing_empty_cells(row: list[str]) -> None:
         row.pop()
 
 
-def clean_transaction_header(row: list[str]) -> list[str]:
-    return [cell.removeprefix("#") for cell in row]
-
-
 def write_xlsx(rows: list[list[str]], output_file: Path) -> None:
     workbook = Workbook()
     workbook.remove(workbook.active)
+    column_indexes = transaction_column_indexes(rows)
 
-    for sheet_name, sheet_rows in group_rows_by_month(rows).items():
+    for sheet_name, transactions in group_transactions_by_month(rows, column_indexes).items():
         sheet = workbook.create_sheet(title=sheet_name)
-
-        for row in sheet_rows:
-            sheet.append(row)
+        write_month_sheet(sheet, transactions, column_indexes)
 
     workbook.save(output_file)
 
 
-def group_rows_by_month(rows: list[list[str]]) -> OrderedDict[str, list[list[str]]]:
+def transaction_column_indexes(rows: list[list[str]]) -> TransactionColumnIndexes:
+    if not rows:
+        raise CsvFormatError("The selected file does not contain transaction rows.")
+
+    header = rows[0]
+    missing_headers = [
+        required_header
+        for required_header in REQUIRED_TRANSACTION_HEADERS
+        if required_header not in header
+    ]
+
+    if missing_headers:
+        raise CsvFormatError(
+            "The transaction table is missing required columns:\n"
+            + "\n".join(missing_headers)
+        )
+
+    return TransactionColumnIndexes(
+        date=header.index(DATE_HEADER),
+        name=header.index(NAME_HEADER),
+        amount=header.index(AMOUNT_HEADER),
+    )
+
+
+def write_month_sheet(
+    sheet,
+    transactions: list[list[str]],
+    column_indexes: TransactionColumnIndexes,
+) -> None:
+    costs, returns = split_transactions_by_amount(transactions, column_indexes)
+    current_row = write_transaction_table(
+        sheet,
+        COSTS_TABLE_TITLE,
+        costs,
+        column_indexes,
+        start_row=1,
+    )
+    write_transaction_table(
+        sheet,
+        RETURNS_TABLE_TITLE,
+        returns,
+        column_indexes,
+        start_row=current_row + 2,
+    )
+
+
+def write_transaction_table(
+    sheet,
+    title: str,
+    transactions: list[list[str]],
+    column_indexes: TransactionColumnIndexes,
+    start_row: int,
+) -> int:
+    sheet.cell(row=start_row, column=OUTPUT_DATE_COLUMN, value=title).font = Font(
+        bold=True
+    )
+    header_row = start_row + 1
+
+    for column_index, header in enumerate(OUTPUT_TABLE_HEADER, start=1):
+        sheet.cell(row=header_row, column=column_index, value=header).font = Font(bold=True)
+
+    current_row = header_row + 1
+
+    for transaction in transactions:
+        sheet.cell(
+            row=current_row,
+            column=OUTPUT_DATE_COLUMN,
+            value=transaction[column_indexes.date],
+        )
+        sheet.cell(
+            row=current_row,
+            column=OUTPUT_NAME_COLUMN,
+            value=transaction[column_indexes.name],
+        )
+        sheet.cell(
+            row=current_row,
+            column=OUTPUT_AMOUNT_COLUMN,
+            value=float(abs(parse_amount(transaction, column_indexes))),
+        )
+        current_row += 1
+
+    return current_row - 1
+
+
+def split_transactions_by_amount(
+    transactions: list[list[str]],
+    column_indexes: TransactionColumnIndexes,
+) -> tuple[list[list[str]], list[list[str]]]:
+    costs = []
+    returns = []
+
+    for transaction in transactions:
+        amount = parse_amount(transaction, column_indexes)
+
+        if amount < 0:
+            costs.append(transaction)
+        elif amount > 0:
+            returns.append(transaction)
+
+    return costs, returns
+
+
+def parse_amount(
+    transaction: list[str],
+    column_indexes: TransactionColumnIndexes,
+) -> Decimal:
+    amount = transaction[column_indexes.amount]
+    normalized_amount = amount.replace("PLN", "").replace(" ", "").replace(",", ".")
+
+    return Decimal(normalized_amount)
+
+
+def group_transactions_by_month(
+    rows: list[list[str]],
+    column_indexes: TransactionColumnIndexes,
+) -> OrderedDict[str, list[list[str]]]:
     if not rows:
         return OrderedDict({"Transactions": []})
 
-    header, transactions = rows[0], rows[1:]
-    grouped_rows: OrderedDict[str, list[list[str]]] = OrderedDict()
+    transactions = rows[1:]
+    grouped_transactions: OrderedDict[str, list[list[str]]] = OrderedDict()
 
     for transaction in transactions:
-        sheet_name = sheet_name_for_transaction(transaction)
-        grouped_rows.setdefault(sheet_name, [header]).append(transaction)
+        sheet_name = sheet_name_for_transaction(transaction, column_indexes)
+        grouped_transactions.setdefault(sheet_name, []).append(transaction)
 
-    if not grouped_rows:
-        return OrderedDict({"Transactions": [header]})
+    if not grouped_transactions:
+        return OrderedDict({"Transactions": []})
 
-    return grouped_rows
+    return grouped_transactions
 
 
-def sheet_name_for_transaction(transaction: list[str]) -> str:
-    transaction_date = date.fromisoformat(transaction[FIRST_COLUMN_INDEX])
+def sheet_name_for_transaction(
+    transaction: list[str],
+    column_indexes: TransactionColumnIndexes,
+) -> str:
+    transaction_date = date.fromisoformat(transaction[column_indexes.date])
     return f"{POLISH_MONTH_NAMES[transaction_date.month]} {transaction_date.year}"
 
 
@@ -161,9 +307,13 @@ def main() -> None:
         print("No file selected.")
         return
 
-    rows = read_csv_rows(input_file)
-    output_file = output_file_for(input_file)
-    write_xlsx(rows, output_file)
+    try:
+        rows = read_csv_rows(input_file)
+        output_file = output_file_for(input_file)
+        write_xlsx(rows, output_file)
+    except CsvFormatError as error:
+        messagebox.showerror("Invalid mBank CSV", str(error))
+        return
 
     print(f"Selected file: {input_file}")
     print(f"Wrote {len(rows)} rows to: {output_file}")
