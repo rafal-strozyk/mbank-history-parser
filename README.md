@@ -1,63 +1,80 @@
 # mbank-history-parser
 
-Parser for transaction history exported from mBank.
+Parser for transaction history CSV files exported from mBank.
 
-The goal of this project is to take a CSV file exported from mBank, parse the
-transaction rows, and produce a cleaned output file that can be copied directly
-into Google Sheets without additional formatting or manual changes.
+The program reads an mBank CSV export, skips the export metadata, extracts the
+transaction table, and writes a cleaned XLSX file that is ready to copy into a
+spreadsheet.
 
-The exact output format is still being decided. It may be a CSV file, an XLSX
-file, or another spreadsheet-friendly format depending on what works best for
-the target Google Sheet workflow.
+## Requirements
 
-## Planned workflow
-
-1. Provide an mBank transaction history CSV file.
-2. Parse and normalize the transaction data.
-3. Generate a spreadsheet-friendly output file.
-4. Copy the resulting rows into Google Sheets.
+- Python 3.14.4 or newer
+- `uv`
 
 ## Development setup
 
-Create a Python 3.14.4 virtual environment with `uv`:
+Create or sync the project environment:
 
 ```bash
-uv venv --python 3.14.4
+uv sync
 ```
-
-Activate it:
-
-```bash
-source .venv/bin/activate
-```
-
-Confirm that Python is running from the virtual environment:
-
-```bash
-which python
-python --version
-```
-
-## Usage
 
 Run the parser:
 
 ```bash
+uv run python main.py
+```
+
+Alternatively, activate the virtual environment manually:
+
+```bash
+source .venv/bin/activate
 python main.py
 ```
 
-For now, this opens a system file picker where you can select the mBank CSV file
-to process.
+## Usage
 
-The program currently finds the transaction table in the selected mBank CSV,
-skips the export metadata before it, and writes the transaction rows into an
-XLSX file next to the input file. The output file is named after the input file
-with `_parsed.xlsx` appended to the original stem.
+Running the parser opens a system file picker. Select the mBank CSV file to
+process.
 
-Transactions are split into separate sheets by month. Sheet names use the
-format `PolishMonthName YYYY`, for example `Sierpień 2026`.
+For an input file named:
 
-Each monthly sheet contains two tables:
+```text
+history.csv
+```
+
+the parser creates:
+
+```text
+history_parsed.xlsx
+```
+
+The output file is written next to the selected input file.
+
+## Expected CSV format
+
+The parser looks for the mBank transaction table header:
+
+```text
+#Data operacji;#Opis operacji;#Rachunek;#Kategoria;#Kwota;
+```
+
+Lines before that table are ignored. If the transaction table or any required
+column is missing, the app shows an error dialog.
+
+## Output format
+
+Transactions are grouped into separate worksheets by month. Worksheet names use
+Polish month names:
+
+```text
+Kwiecień 2026
+Sierpień 2026
+```
+
+Transactions inside each worksheet are sorted by operation date ascending.
+
+Each worksheet contains costs and returns side by side:
 
 ```text
 sum costs                     sum returns
@@ -67,20 +84,12 @@ costs                         returns
 name | amount | date          name | amount | date
 ```
 
-Negative transactions go into `costs`, positive transactions go into `returns`,
-and amounts are written as positive values in both tables. The summary rows show
-the total positive amount for each table. Dates are formatted as `DD.MM.YYYY`,
-and amounts are formatted with a comma decimal separator, for example `309,79`.
+Rules:
 
-For example, selecting `history.csv` creates:
-
-```text
-history_parsed.xlsx
-```
-
-Detailed transaction parsing and final output formatting will be added next.
-
-## Status
-
-Early project setup. Requirements and output format will be refined as the
-parser is implemented.
+- Negative transactions go into `costs`.
+- Positive transactions go into `returns`.
+- Amounts are output as positive values in both tables.
+- Amounts use a comma decimal separator, for example `309,79`.
+- Dates use `DD.MM.YYYY`, for example `11.04.2026`.
+- Transaction names are trimmed at the first repeated whitespace sequence.
+- Name and date columns are widened automatically in the XLSX output.
