@@ -27,12 +27,14 @@ REQUIRED_TRANSACTION_HEADERS = (
     CATEGORY_HEADER,
     AMOUNT_HEADER,
 )
-OUTPUT_TABLE_HEADER = ["date", "name", "amount"]
+OUTPUT_TABLE_HEADER = ["name", "amount", "date"]
 COSTS_TABLE_TITLE = "costs"
 RETURNS_TABLE_TITLE = "returns"
-OUTPUT_DATE_COLUMN = 1
-OUTPUT_NAME_COLUMN = 2
-OUTPUT_AMOUNT_COLUMN = 3
+COSTS_TABLE_START_COLUMN = 1
+RETURNS_TABLE_START_COLUMN = 5
+OUTPUT_NAME_COLUMN_OFFSET = 0
+OUTPUT_AMOUNT_COLUMN_OFFSET = 1
+OUTPUT_DATE_COLUMN_OFFSET = 2
 POLISH_MONTH_NAMES = {
     1: "Styczeń",
     2: "Luty",
@@ -186,19 +188,21 @@ def write_month_sheet(
     column_indexes: TransactionColumnIndexes,
 ) -> None:
     costs, returns = split_transactions_by_amount(transactions, column_indexes)
-    current_row = write_transaction_table(
+    write_transaction_table(
         sheet,
         COSTS_TABLE_TITLE,
         costs,
         column_indexes,
         start_row=1,
+        start_column=COSTS_TABLE_START_COLUMN,
     )
     write_transaction_table(
         sheet,
         RETURNS_TABLE_TITLE,
         returns,
         column_indexes,
-        start_row=current_row + 2,
+        start_row=1,
+        start_column=RETURNS_TABLE_START_COLUMN,
     )
 
 
@@ -208,32 +212,37 @@ def write_transaction_table(
     transactions: list[list[str]],
     column_indexes: TransactionColumnIndexes,
     start_row: int,
+    start_column: int,
 ) -> int:
-    sheet.cell(row=start_row, column=OUTPUT_DATE_COLUMN, value=title).font = Font(
+    sheet.cell(row=start_row, column=start_column, value=title).font = Font(
         bold=True
     )
     header_row = start_row + 1
 
     for column_index, header in enumerate(OUTPUT_TABLE_HEADER, start=1):
-        sheet.cell(row=header_row, column=column_index, value=header).font = Font(bold=True)
+        sheet.cell(
+            row=header_row,
+            column=start_column + column_index - 1,
+            value=header,
+        ).font = Font(bold=True)
 
     current_row = header_row + 1
 
     for transaction in transactions:
         sheet.cell(
             row=current_row,
-            column=OUTPUT_DATE_COLUMN,
-            value=transaction[column_indexes.date],
-        )
-        sheet.cell(
-            row=current_row,
-            column=OUTPUT_NAME_COLUMN,
+            column=start_column + OUTPUT_NAME_COLUMN_OFFSET,
             value=transaction[column_indexes.name],
         )
         sheet.cell(
             row=current_row,
-            column=OUTPUT_AMOUNT_COLUMN,
-            value=float(abs(parse_amount(transaction, column_indexes))),
+            column=start_column + OUTPUT_AMOUNT_COLUMN_OFFSET,
+            value=format_amount(parse_amount(transaction, column_indexes)),
+        )
+        sheet.cell(
+            row=current_row,
+            column=start_column + OUTPUT_DATE_COLUMN_OFFSET,
+            value=format_date(transaction[column_indexes.date]),
         )
         current_row += 1
 
@@ -266,6 +275,14 @@ def parse_amount(
     normalized_amount = amount.replace("PLN", "").replace(" ", "").replace(",", ".")
 
     return Decimal(normalized_amount)
+
+
+def format_amount(amount: Decimal) -> str:
+    return f"{abs(amount):.2f}".replace(".", ",")
+
+
+def format_date(transaction_date: str) -> str:
+    return date.fromisoformat(transaction_date).strftime("%d.%m.%Y")
 
 
 def group_transactions_by_month(
