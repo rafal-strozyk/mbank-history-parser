@@ -10,12 +10,13 @@ from pathlib import Path
 from tkinter import Tk, filedialog, messagebox
 
 from openpyxl import Workbook
+from openpyxl.utils import get_column_letter
 from openpyxl.styles import Font
 
 
 ENCODINGS_TO_TRY = ("utf-8-sig", "utf-8", "cp1250", "iso-8859-2")
 CSV_SNIFF_SAMPLE_SIZE = 4096
-REPEATED_WHITESPACE_PATTERN = re.compile(r"\s+")
+REPEATED_WHITESPACE_PATTERN = re.compile(r"\s{2,}")
 LAST_COLUMN_INDEX = -1
 DATE_HEADER = "#Data operacji"
 NAME_HEADER = "#Opis operacji"
@@ -40,6 +41,7 @@ TRANSACTION_TABLE_START_ROW = 4
 OUTPUT_NAME_COLUMN_OFFSET = 0
 OUTPUT_AMOUNT_COLUMN_OFFSET = 1
 OUTPUT_DATE_COLUMN_OFFSET = 2
+COLUMN_WIDTH_PADDING = 1
 POLISH_MONTH_NAMES = {
     1: "Styczeń",
     2: "Luty",
@@ -211,6 +213,7 @@ def write_month_sheet(
         start_row=TRANSACTION_TABLE_START_ROW,
         start_column=RETURNS_TABLE_START_COLUMN,
     )
+    adjust_output_column_widths(sheet)
 
 
 def write_summary(
@@ -273,6 +276,28 @@ def write_transaction_table(
     return current_row - 1
 
 
+def adjust_output_column_widths(sheet) -> None:
+    for column_index in output_columns_to_autofit():
+        column_letter = get_column_letter(column_index)
+        max_value_length = max(
+            len(str(cell.value))
+            for cell in sheet[column_letter]
+            if cell.value is not None
+        )
+        sheet.column_dimensions[column_letter].width = (
+            max_value_length + COLUMN_WIDTH_PADDING
+        )
+
+
+def output_columns_to_autofit() -> tuple[int, ...]:
+    return (
+        COSTS_TABLE_START_COLUMN + OUTPUT_NAME_COLUMN_OFFSET,
+        COSTS_TABLE_START_COLUMN + OUTPUT_DATE_COLUMN_OFFSET,
+        RETURNS_TABLE_START_COLUMN + OUTPUT_NAME_COLUMN_OFFSET,
+        RETURNS_TABLE_START_COLUMN + OUTPUT_DATE_COLUMN_OFFSET,
+    )
+
+
 def sum_transactions(
     transactions: list[list[str]],
     column_indexes: TransactionColumnIndexes,
@@ -320,7 +345,15 @@ def format_date(transaction_date: str) -> str:
 
 
 def format_transaction_name(transaction_name: str) -> str:
-    return REPEATED_WHITESPACE_PATTERN.sub(" ", transaction_name).strip()
+    stripped_transaction_name = transaction_name.strip()
+    repeated_whitespace_match = REPEATED_WHITESPACE_PATTERN.search(
+        stripped_transaction_name
+    )
+
+    if repeated_whitespace_match is None:
+        return stripped_transaction_name
+
+    return stripped_transaction_name[: repeated_whitespace_match.start()]
 
 
 def group_transactions_by_month(
