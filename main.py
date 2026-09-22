@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import csv
-from html import escape
 from pathlib import Path
 from tkinter import Tk, filedialog
-from zipfile import ZIP_DEFLATED, ZipFile
+
+from openpyxl import Workbook
 
 
 ENCODINGS_TO_TRY = ("utf-8-sig", "utf-8", "cp1250", "iso-8859-2")
@@ -88,76 +88,15 @@ def clean_transaction_header(row: list[str]) -> list[str]:
     return [cell.removeprefix("#") for cell in row]
 
 
-def column_name(column_index: int) -> str:
-    name = ""
-
-    while column_index:
-        column_index, remainder = divmod(column_index - 1, 26)
-        name = chr(65 + remainder) + name
-
-    return name
-
-
-def worksheet_xml(rows: list[list[str]]) -> str:
-    sheet_rows = []
-
-    for row_index, row in enumerate(rows, start=1):
-        cells = []
-
-        for column_index, value in enumerate(row, start=1):
-            cell_reference = f"{column_name(column_index)}{row_index}"
-            escaped_value = escape(value)
-            cells.append(
-                f'<c r="{cell_reference}" t="inlineStr">'
-                f"<is><t>{escaped_value}</t></is>"
-                "</c>"
-            )
-
-        sheet_rows.append(f'<row r="{row_index}">{"".join(cells)}</row>')
-
-    return (
-        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-        '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
-        f'<sheetData>{"".join(sheet_rows)}</sheetData>'
-        "</worksheet>"
-    )
-
-
 def write_xlsx(rows: list[list[str]], output_file: Path) -> None:
-    with ZipFile(output_file, "w", ZIP_DEFLATED) as xlsx:
-        xlsx.writestr(
-            "[Content_Types].xml",
-            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-            '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
-            '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
-            '<Default Extension="xml" ContentType="application/xml"/>'
-            '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
-            '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
-            "</Types>",
-        )
-        xlsx.writestr(
-            "_rels/.rels",
-            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-            '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
-            '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>'
-            "</Relationships>",
-        )
-        xlsx.writestr(
-            "xl/workbook.xml",
-            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-            '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
-            'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
-            '<sheets><sheet name="Transactions" sheetId="1" r:id="rId1"/></sheets>'
-            "</workbook>",
-        )
-        xlsx.writestr(
-            "xl/_rels/workbook.xml.rels",
-            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-            '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
-            '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>'
-            "</Relationships>",
-        )
-        xlsx.writestr("xl/worksheets/sheet1.xml", worksheet_xml(rows))
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "Transactions"
+
+    for row in rows:
+        sheet.append(row)
+
+    workbook.save(output_file)
 
 
 def output_file_for(input_file: Path) -> Path:
