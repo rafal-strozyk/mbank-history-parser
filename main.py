@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import csv
+from collections import OrderedDict
+from datetime import date
 from pathlib import Path
 from tkinter import Tk, filedialog
 
@@ -8,7 +10,24 @@ from openpyxl import Workbook
 
 
 ENCODINGS_TO_TRY = ("utf-8-sig", "utf-8", "cp1250", "iso-8859-2")
+CSV_SNIFF_SAMPLE_SIZE = 4096
+FIRST_COLUMN_INDEX = 0
+LAST_COLUMN_INDEX = -1
 TRANSACTION_HEADER_FIRST_COLUMN = "#Data operacji"
+POLISH_MONTH_NAMES = {
+    1: "Styczeń",
+    2: "Luty",
+    3: "Marzec",
+    4: "Kwiecień",
+    5: "Maj",
+    6: "Czerwiec",
+    7: "Lipiec",
+    8: "Sierpień",
+    9: "Wrzesień",
+    10: "Październik",
+    11: "Listopad",
+    12: "Grudzień",
+}
 
 
 def select_input_file() -> Path | None:
@@ -42,7 +61,7 @@ def read_csv_rows(input_file: Path) -> list[list[str]]:
             last_error = error
             continue
 
-        sample = content[:4096]
+        sample = content[:CSV_SNIFF_SAMPLE_SIZE]
         try:
             dialect = csv.Sniffer().sniff(sample, delimiters=",;\t")
         except csv.Error:
@@ -62,7 +81,7 @@ def extract_transaction_rows(csv_rows: list[list[str]]) -> list[list[str]]:
     for row_index, row in enumerate(csv_rows):
         cleaned_row = clean_row(row)
 
-        if cleaned_row and cleaned_row[0] == TRANSACTION_HEADER_FIRST_COLUMN:
+        if is_transaction_header_row(cleaned_row):
             return [
                 clean_transaction_header(cleaned_row),
                 *[
@@ -78,10 +97,18 @@ def extract_transaction_rows(csv_rows: list[list[str]]) -> list[list[str]]:
 def clean_row(row: list[str]) -> list[str]:
     cleaned_row = [cell.strip() for cell in row]
 
-    while cleaned_row and cleaned_row[-1] == "":
-        cleaned_row.pop()
+    remove_trailing_empty_cells(cleaned_row)
 
     return cleaned_row
+
+
+def is_transaction_header_row(row: list[str]) -> bool:
+    return bool(row) and row[FIRST_COLUMN_INDEX] == TRANSACTION_HEADER_FIRST_COLUMN
+
+
+def remove_trailing_empty_cells(row: list[str]) -> None:
+    while row and row[LAST_COLUMN_INDEX] == "":
+        row.pop()
 
 
 def clean_transaction_header(row: list[str]) -> list[str]:
@@ -90,13 +117,37 @@ def clean_transaction_header(row: list[str]) -> list[str]:
 
 def write_xlsx(rows: list[list[str]], output_file: Path) -> None:
     workbook = Workbook()
-    sheet = workbook.active
-    sheet.title = "Transactions"
+    workbook.remove(workbook.active)
 
-    for row in rows:
-        sheet.append(row)
+    for sheet_name, sheet_rows in group_rows_by_month(rows).items():
+        sheet = workbook.create_sheet(title=sheet_name)
+
+        for row in sheet_rows:
+            sheet.append(row)
 
     workbook.save(output_file)
+
+
+def group_rows_by_month(rows: list[list[str]]) -> OrderedDict[str, list[list[str]]]:
+    if not rows:
+        return OrderedDict({"Transactions": []})
+
+    header, transactions = rows[0], rows[1:]
+    grouped_rows: OrderedDict[str, list[list[str]]] = OrderedDict()
+
+    for transaction in transactions:
+        sheet_name = sheet_name_for_transaction(transaction)
+        grouped_rows.setdefault(sheet_name, [header]).append(transaction)
+
+    if not grouped_rows:
+        return OrderedDict({"Transactions": [header]})
+
+    return grouped_rows
+
+
+def sheet_name_for_transaction(transaction: list[str]) -> str:
+    transaction_date = date.fromisoformat(transaction[FIRST_COLUMN_INDEX])
+    return f"{POLISH_MONTH_NAMES[transaction_date.month]} {transaction_date.year}"
 
 
 def output_file_for(input_file: Path) -> Path:

@@ -54,6 +54,22 @@ skips the export metadata before it, and writes the transaction rows into an
 XLSX file next to the input file. The output file is named after the input file
 with `_parsed.xlsx` appended to the original stem.
 
+Transactions are split into separate sheets by month. Sheet names use the
+format `PolishMonthName YYYY`, for example `Sierpień 2026`.
+
+Each monthly sheet contains two tables:
+
+```text
+costs
+date | name | amount
+
+returns
+date | name | amount
+```
+
+Negative transactions go into `costs`, positive transactions go into `returns`,
+and amounts are written as positive values in both tables.
+
 For example, selecting `history.csv` creates:
 
 ```text
