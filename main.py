@@ -32,6 +32,9 @@ COSTS_TABLE_TITLE = "costs"
 RETURNS_TABLE_TITLE = "returns"
 COSTS_TABLE_START_COLUMN = 1
 RETURNS_TABLE_START_COLUMN = 5
+SUMMARY_TITLE_ROW = 1
+SUMMARY_AMOUNT_ROW = 2
+TRANSACTION_TABLE_START_ROW = 4
 OUTPUT_NAME_COLUMN_OFFSET = 0
 OUTPUT_AMOUNT_COLUMN_OFFSET = 1
 OUTPUT_DATE_COLUMN_OFFSET = 2
@@ -188,12 +191,14 @@ def write_month_sheet(
     column_indexes: TransactionColumnIndexes,
 ) -> None:
     costs, returns = split_transactions_by_amount(transactions, column_indexes)
+    write_summary(sheet, "sum costs", costs, column_indexes, COSTS_TABLE_START_COLUMN)
+    write_summary(sheet, "sum returns", returns, column_indexes, RETURNS_TABLE_START_COLUMN)
     write_transaction_table(
         sheet,
         COSTS_TABLE_TITLE,
         costs,
         column_indexes,
-        start_row=1,
+        start_row=TRANSACTION_TABLE_START_ROW,
         start_column=COSTS_TABLE_START_COLUMN,
     )
     write_transaction_table(
@@ -201,8 +206,25 @@ def write_month_sheet(
         RETURNS_TABLE_TITLE,
         returns,
         column_indexes,
-        start_row=1,
+        start_row=TRANSACTION_TABLE_START_ROW,
         start_column=RETURNS_TABLE_START_COLUMN,
+    )
+
+
+def write_summary(
+    sheet,
+    title: str,
+    transactions: list[list[str]],
+    column_indexes: TransactionColumnIndexes,
+    start_column: int,
+) -> None:
+    sheet.cell(row=SUMMARY_TITLE_ROW, column=start_column, value=title).font = Font(
+        bold=True
+    )
+    sheet.cell(
+        row=SUMMARY_AMOUNT_ROW,
+        column=start_column,
+        value=format_amount(sum_transactions(transactions, column_indexes)),
     )
 
 
@@ -247,6 +269,16 @@ def write_transaction_table(
         current_row += 1
 
     return current_row - 1
+
+
+def sum_transactions(
+    transactions: list[list[str]],
+    column_indexes: TransactionColumnIndexes,
+) -> Decimal:
+    return sum(
+        (abs(parse_amount(transaction, column_indexes)) for transaction in transactions),
+        Decimal("0"),
+    )
 
 
 def split_transactions_by_amount(

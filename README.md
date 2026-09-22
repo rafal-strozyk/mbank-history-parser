@@ -60,14 +60,17 @@ format `PolishMonthName YYYY`, for example `Sierpień 2026`.
 Each monthly sheet contains two tables:
 
 ```text
+sum costs                     sum returns
+amount                        amount
+
 costs                         returns
 name | amount | date          name | amount | date
 ```
 
 Negative transactions go into `costs`, positive transactions go into `returns`,
-and amounts are written as positive values in both tables. Dates are formatted
-as `DD.MM.YYYY`, and amounts are formatted with a comma decimal separator, for
-example `309,79`.
+and amounts are written as positive values in both tables. The summary rows show
+the total positive amount for each table. Dates are formatted as `DD.MM.YYYY`,
+and amounts are formatted with a comma decimal separator, for example `309,79`.
 
 For example, selecting `history.csv` creates:
 
