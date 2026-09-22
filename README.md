@@ -47,7 +47,20 @@ python main.py
 ```
 
 For now, this opens a system file picker where you can select the mBank CSV file
-to process. Parsing and output generation will be added next.
+to process.
+
+The program currently finds the transaction table in the selected mBank CSV,
+skips the export metadata before it, and writes the transaction rows into an
+XLSX file next to the input file. The output file is named after the input file
+with `_parsed.xlsx` appended to the original stem.
+
+For example, selecting `history.csv` creates:
+
+```text
+history_parsed.xlsx
+```
+
+Detailed transaction parsing and final output formatting will be added next.
 
 ## Status
 
