@@ -1,0 +1,230 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+env:
+  APP_NAME: mbank-history-parser
+  PYINSTALLER_CONFIG_DIR: build/pyinstaller-config
+  PYTHON_VERSION: "3.14"
+
+jobs:
+  release-info:
+    name: Resolve release info
+    runs-on: ubuntu-latest
+    outputs:
+      should_release: ${{ steps.release-info.outputs.should_release }}
+      tag: ${{ steps.release-info.outputs.tag }}
+      version: ${{ steps.release-info.outputs.version }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve version change
+        id: release-info
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+          AFTER_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          if ! git diff --name-only "${BEFORE_SHA}" "${AFTER_SHA}" | grep -qx 'pyproject.toml'; then
+            echo "pyproject.toml did not change. Skipping release."
+            echo "should_release=false" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          before_version="$(
+            git show "${BEFORE_SHA}:pyproject.toml" \
+              | python -c 'import sys, tomllib; print(tomllib.loads(sys.stdin.read())["project"]["version"])'
+          )"
+          after_version="$(
+            git show "${AFTER_SHA}:pyproject.toml" \
+              | python -c 'import sys, tomllib; print(tomllib.loads(sys.stdin.read())["project"]["version"])'
+          )"
+
+          if [ "${before_version}" = "${after_version}" ]; then
+            echo "pyproject.toml changed, but project.version stayed ${after_version}. Skipping release."
+            echo "should_release=false" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          tag="v${after_version}"
+
+          if git ls-remote --exit-code --tags origin "refs/tags/${tag}" >/dev/null 2>&1; then
+            echo "::error::Release tag ${tag} already exists. Bump pyproject.toml project.version before merging."
+            exit 1
+          fi
+
+          echo "Preparing release ${tag}."
+          echo "should_release=true" >> "${GITHUB_OUTPUT}"
+          echo "version=${after_version}" >> "${GITHUB_OUTPUT}"
+          echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
+
+  build:
+    name: Build ${{ matrix.platform }}
+    needs: release-info
+    if: needs.release-info.outputs.should_release == 'true'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            platform: macos
+            archive_name: mbank-history-parser-macos.zip
+          - os: windows-latest
+            platform: windows
+            archive_name: mbank-history-parser-windows.zip
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install uv
+        run: python -m pip install --upgrade pip uv
+
+      - name: Install locked dependencies
+        run: uv sync --locked --dev
+
+      - name: Smoke test parser output
+        shell: bash
+        run: |
+          uv run python - <<'PY'
+          import tempfile
+          from pathlib import Path
+
+          from openpyxl import load_workbook
+
+          from main import read_csv_rows, write_xlsx
+
+          csv_content = "\n".join(
+              [
+                  "Export metadata",
+                  "#Data operacji;#Opis operacji;#Rachunek;#Kategoria;#Kwota;",
+                  "2026-04-11;Sklep spozywczy    KARTA;12 345;Zakupy;-309,79 PLN;",
+                  "2026-04-12;Zwrot;12 345;Zwroty;50,00 PLN;",
+              ]
+          )
+
+          with tempfile.TemporaryDirectory() as temporary_directory:
+              input_file = Path(temporary_directory) / "history.csv"
+              output_file = Path(temporary_directory) / "history_parsed.xlsx"
+              input_file.write_text(csv_content, encoding="utf-8")
+
+              rows = read_csv_rows(input_file)
+              write_xlsx(rows, output_file)
+
+              workbook = load_workbook(output_file)
+              sheet = workbook["Kwiecień 2026"]
+
+              assert sheet["A1"].value == "sum costs"
+              assert sheet["A2"].value == "309,79"
+              assert sheet["E1"].value == "sum returns"
+              assert sheet["E2"].value == "50,00"
+              assert sheet["A6"].value == "Sklep spozywczy"
+              assert sheet["B6"].value == "309,79"
+              assert sheet["C6"].value == "11.04.2026"
+              assert sheet["E6"].value == "Zwrot"
+              assert sheet["F6"].value == "50,00"
+              assert sheet["G6"].value == "12.04.2026"
+          PY
+
+      - name: Build macOS app bundle
+        if: runner.os == 'macOS'
+        run: >
+          uv run pyinstaller
+          --noconfirm
+          --clean
+          --windowed
+          --name "${{ env.APP_NAME }}"
+          --specpath build
+          main.py
+
+      - name: Build Windows executable
+        if: runner.os == 'Windows'
+        run: >
+          uv run pyinstaller
+          --noconfirm
+          --clean
+          --windowed
+          --onefile
+          --name "${{ env.APP_NAME }}"
+          --specpath build
+          main.py
+
+      - name: Package macOS app bundle
+        if: runner.os == 'macOS'
+        run: |
+          mkdir -p release
+          ditto -c -k --sequesterRsrc --keepParent \
+            "dist/${APP_NAME}.app" \
+            "release/${{ matrix.archive_name }}"
+          shasum -a 256 "release/${{ matrix.archive_name }}" > "release/${{ matrix.archive_name }}.sha256"
+
+      - name: Package Windows executable
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path release | Out-Null
+          Compress-Archive `
+            -Path "dist/${env:APP_NAME}.exe" `
+            -DestinationPath "release/${{ matrix.archive_name }}" `
+            -Force
+          $hash = (Get-FileHash "release/${{ matrix.archive_name }}" -Algorithm SHA256).Hash.ToLower()
+          Set-Content `
+            -Path "release/${{ matrix.archive_name }}.sha256" `
+            -Value "$hash  ${{ matrix.archive_name }}"
+
+      - name: Upload release asset
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.platform }}-release-asset
+          path: release/*
+          if-no-files-found: error
+
+  publish:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+    needs:
+      - release-info
+      - build
+    if: needs.release-info.outputs.should_release == 'true'
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download release assets
+        uses: actions/download-artifact@v4
+        with:
+          path: release
+          merge-multiple: true
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.release-info.outputs.tag }}
+        shell: bash
+        run: |
+          if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
+            echo "::error::Release ${RELEASE_TAG} already exists. Bump pyproject.toml project.version before merging."
+            exit 1
+          fi
+
+          gh release create "${RELEASE_TAG}" release/* \
+            --title "${RELEASE_TAG}" \
+            --target "${GITHUB_SHA}" \
+            --generate-notes

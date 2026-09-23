@@ -1,0 +1,63 @@
+name: Pull Request
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  validate-release-version:
+    name: Validate release version
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Require version bump for release-relevant changes
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        shell: bash
+        run: |
+          changed_files="$(git diff --name-only "${BASE_SHA}" "${HEAD_SHA}")"
+          release_relevant_files="$(
+            printf '%s\n' "${changed_files}" \
+              | grep -E '^(main\.py|pyproject\.toml|uv\.lock|\.github/workflows/(pull-request|release)\.yml)$' \
+              || true
+          )"
+
+          if [ -z "${release_relevant_files}" ]; then
+            echo "No release-relevant files changed. No version bump required."
+            exit 0
+          fi
+
+          base_version="$(
+            git show "${BASE_SHA}:pyproject.toml" \
+              | python -c 'import sys, tomllib; print(tomllib.loads(sys.stdin.read())["project"]["version"])'
+          )"
+          head_version="$(
+            git show "${HEAD_SHA}:pyproject.toml" \
+              | python -c 'import sys, tomllib; print(tomllib.loads(sys.stdin.read())["project"]["version"])'
+          )"
+
+          if [ "${base_version}" = "${head_version}" ]; then
+            {
+              echo "Release-relevant files changed, but pyproject.toml project.version was not bumped."
+              echo
+              echo "Changed release-relevant files:"
+              printf '%s\n' "${release_relevant_files}"
+              echo
+              echo "Current version: ${head_version}"
+            } >> "${GITHUB_STEP_SUMMARY}"
+
+            echo "::error::Release-relevant files changed, but pyproject.toml project.version was not bumped."
+            exit 1
+          fi
+
+          echo "Version changed from ${base_version} to ${head_version}."
