@@ -1,5 +1,5 @@
 name: Pull Request
-run-name: PR ${{ github.event.pull_request.number }} release validation
+run-name: "PR #${{ github.event.pull_request.number }} release validation"
 
 on:
   pull_request:
@@ -8,6 +8,9 @@ on:
 
 permissions:
   contents: read
+
+env:
+  PYTHON_VERSION: "3.14"
 
 jobs:
   validate-release-version:
@@ -29,7 +32,7 @@ jobs:
           changed_files="$(git diff --name-only "${BASE_SHA}" "${HEAD_SHA}")"
           release_relevant_files="$(
             printf '%s\n' "${changed_files}" \
-              | grep -E '^(main\.py|pyproject\.toml|uv\.lock|\.github/workflows/(pull-request|release)\.yml)$' \
+              | grep -E '^(main\.py|pyproject\.toml)$' \
               || true
           )"
 
@@ -62,3 +65,23 @@ jobs:
           fi
 
           echo "Version changed from ${base_version} to ${head_version}."
+
+  validate-locked-dependencies:
+    name: Validate locked dependencies
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install uv
+        run: python -m pip install --upgrade pip uv
+
+      - name: Check lockfile is up to date
+        run: uv sync --locked --dev

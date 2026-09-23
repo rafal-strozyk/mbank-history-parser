@@ -114,21 +114,22 @@ GitHub Actions builds ready-to-run release artifacts for macOS and Windows.
 Releases are created automatically after a pull request is merged into `main`,
 but only when `project.version` in `pyproject.toml` changed.
 
-For release-relevant changes, bump the version in `pyproject.toml` in the same
-pull request. The pull request check fails if release-relevant files changed
-without a version bump.
+For app or version changes, bump the version in `pyproject.toml` in the same
+pull request. The pull request check fails if `main.py` or `pyproject.toml`
+changed without a version bump.
 
 The release tag is derived from the project version. For example, version
 `0.1.1` creates release tag `v0.1.1`. If that tag or release already exists,
 the workflow fails instead of replacing the old release.
 
-Release-relevant files are:
+Files that require a version bump are:
 
 - `main.py`
 - `pyproject.toml`
-- `uv.lock`
-- `.github/workflows/pull-request.yml`
-- `.github/workflows/release.yml`
+
+The PR check also runs `uv sync --locked --dev`, so `uv.lock` must stay in sync
+with `pyproject.toml`. A lockfile-only fix does not require another version
+bump.
 
 If only documentation files such as `README.md` changed, the pull request can be
 merged without a version bump and no release is created.
