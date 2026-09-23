@@ -1,4 +1,5 @@
 name: Release
+run-name: Release from main
 
 on:
   push:
@@ -216,6 +217,7 @@ jobs:
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
           RELEASE_TAG: ${{ needs.release-info.outputs.tag }}
         shell: bash
         run: |
