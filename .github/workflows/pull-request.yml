@@ -1,5 +1,5 @@
 name: Pull Request
-run-name: PR #${{ github.event.pull_request.number }} release validation
+run-name: PR ${{ github.event.pull_request.number }} release validation
 
 on:
   pull_request:
