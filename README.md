@@ -32,6 +32,20 @@ source .venv/bin/activate
 python main.py
 ```
 
+Build a local standalone app with PyInstaller:
+
+```bash
+# macOS app bundle
+uv run pyinstaller --noconfirm --clean --windowed --name mbank-history-parser --specpath build main.py
+
+# Windows executable
+uv run pyinstaller --noconfirm --clean --windowed --onefile --name mbank-history-parser --specpath build main.py
+```
+
+The build output is written to `dist/`. On macOS this creates
+`dist/mbank-history-parser.app`; on Windows this creates
+`dist/mbank-history-parser.exe`.
+
 ## Usage
 
 Running the parser opens a system file picker. Select the mBank CSV file to
@@ -93,3 +107,38 @@ Rules:
 - Dates use `DD.MM.YYYY`, for example `11.04.2026`.
 - Transaction names are trimmed at the first repeated whitespace sequence.
 - Name and date columns are widened automatically in the XLSX output.
+
+## Releases
+
+GitHub Actions builds ready-to-run release artifacts for macOS and Windows.
+Releases are created automatically after a pull request is merged into `main`,
+but only when `project.version` in `pyproject.toml` changed.
+
+For release-relevant changes, bump the version in `pyproject.toml` in the same
+pull request. The pull request check fails if release-relevant files changed
+without a version bump.
+
+The release tag is derived from the project version. For example, version
+`0.1.1` creates release tag `v0.1.1`. If that tag or release already exists,
+the workflow fails instead of replacing the old release.
+
+Release-relevant files are:
+
+- `main.py`
+- `pyproject.toml`
+- `uv.lock`
+- `.github/workflows/pull-request.yml`
+- `.github/workflows/release.yml`
+
+If only documentation files such as `README.md` changed, the pull request can be
+merged without a version bump and no release is created.
+
+Each release uploads:
+
+- `mbank-history-parser-macos.zip` containing the macOS app bundle.
+- `mbank-history-parser-windows.zip` containing the Windows executable.
+- `.sha256` checksum files for both archives.
+
+Download the archive for your operating system, unpack it, and run the app.
+The app opens the same file picker as the development version and writes the
+`*_parsed.xlsx` file next to the selected CSV file.
