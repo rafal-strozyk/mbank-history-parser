@@ -137,7 +137,8 @@ Each release uploads:
 
 - `mbank-history-parser-macos.zip` containing the macOS app bundle.
 - `mbank-history-parser-windows.zip` containing the Windows executable.
-- `.sha256` checksum files for both archives.
+
+GitHub displays SHA-256 digests for release assets in the release page.
 
 Download the archive for your operating system, unpack it, and run the app.
 The app opens the same file picker as the development version and writes the
