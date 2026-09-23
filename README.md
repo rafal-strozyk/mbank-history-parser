@@ -144,3 +144,24 @@ GitHub displays SHA-256 digests for release assets in the release page.
 Download the archive for your operating system, unpack it, and run the app.
 The app opens the same file picker as the development version and writes the
 `*_parsed.xlsx` file next to the selected CSV file.
+
+### macOS security warning
+
+The macOS release is not signed or notarized with an Apple Developer ID. Because
+of that, macOS may show a warning that Apple could not verify the app is free of
+malware after you download and unpack the ZIP file.
+
+To allow the downloaded app from Terminal, run:
+
+```bash
+xattr -dr com.apple.quarantine dist/mbank-history-parser.app
+```
+
+If you already tried to open the app and saw the warning, you can also allow it
+from System Settings:
+
+1. Open **System Settings**.
+2. Go to **Privacy & Security**.
+3. Scroll to the bottom.
+4. Click **Open Anyway** for `mbank-history-parser`.
+5. Confirm that you want to open the app.
