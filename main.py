@@ -412,6 +412,18 @@ def show_error_dialog(title: str, message: str) -> None:
     root.destroy()
 
 
+def show_completion_dialog(output_file: Path) -> None:
+    root = Tk()
+    root.withdraw()
+    messagebox.showinfo(
+        title="Parsing complete",
+        message="The mBank transaction history has been parsed successfully.",
+        detail=f"Output file:\n{output_file}",
+        parent=root,
+    )
+    root.destroy()
+
+
 def main() -> None:
     input_file = select_input_file()
 
@@ -426,6 +438,8 @@ def main() -> None:
     except CsvFormatError as error:
         show_error_dialog("Invalid mBank CSV", str(error))
         return
+
+    show_completion_dialog(output_file)
 
     print(f"Selected file: {input_file}")
     print(f"Wrote {len(rows)} rows to: {output_file}")

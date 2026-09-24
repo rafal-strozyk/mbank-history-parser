@@ -64,6 +64,8 @@ history_parsed.xlsx
 ```
 
 The output file is written next to the selected input file.
+After the file is written, the app shows a completion dialog with the output
+file path.
 
 ## Expected CSV format
 
