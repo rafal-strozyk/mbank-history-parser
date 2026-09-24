@@ -69,13 +69,26 @@ class TransactionColumnIndexes:
     amount: int
 
 
-def select_input_file() -> Path | None:
+@dataclass(frozen=True)
+class ParsedFile:
+    input_file: Path
+    output_file: Path
+    row_count: int
+
+
+@dataclass(frozen=True)
+class FailedFile:
+    input_file: Path
+    error: Exception
+
+
+def select_input_files() -> list[Path]:
     root = Tk()
     root.withdraw()
     root.update()
 
-    selected_file = filedialog.askopenfilename(
-        title="Select mBank transaction history CSV",
+    selected_files = filedialog.askopenfilenames(
+        title="Select mBank transaction history CSV files",
         filetypes=[
             ("CSV files", "*.csv"),
             ("All files", "*.*"),
@@ -84,10 +97,7 @@ def select_input_file() -> Path | None:
 
     root.destroy()
 
-    if not selected_file:
-        return None
-
-    return Path(selected_file)
+    return [Path(selected_file) for selected_file in selected_files]
 
 
 def read_csv_rows(input_file: Path) -> list[list[str]]:
@@ -399,50 +409,134 @@ def output_file_for(input_file: Path) -> Path:
     return input_file.with_name(f"{input_file.stem}_parsed.xlsx")
 
 
-def show_error_dialog(title: str, message: str) -> None:
+def parse_input_file(input_file: Path) -> ParsedFile:
+    rows = read_csv_rows(input_file)
+    output_file = output_file_for(input_file)
+    write_xlsx(rows, output_file)
+
+    return ParsedFile(
+        input_file=input_file,
+        output_file=output_file,
+        row_count=len(rows),
+    )
+
+
+def parse_input_files(
+    input_files: list[Path],
+) -> tuple[list[ParsedFile], list[FailedFile]]:
+    parsed_files = []
+    failed_files = []
+
+    for input_file in input_files:
+        try:
+            parsed_files.append(parse_input_file(input_file))
+        except Exception as error:
+            failed_files.append(FailedFile(input_file=input_file, error=error))
+
+    return parsed_files, failed_files
+
+
+def show_batch_summary_dialog(
+    parsed_files: list[ParsedFile],
+    failed_files: list[FailedFile],
+) -> None:
     root = Tk()
     root.withdraw()
-    messagebox.showerror(
-        title=title,
-        message="The selected file cannot be parsed.",
-        icon="error",
-        detail=message,
-        parent=root,
+
+    selected_file_count = len(parsed_files) + len(failed_files)
+    summary = (
+        f"Parsed {len(parsed_files)} of {selected_file_count} "
+        f"{pluralize('file', selected_file_count)}."
     )
+    detail = batch_summary_detail(parsed_files, failed_files)
+
+    if not failed_files:
+        messagebox.showinfo(
+            title="Parsing complete",
+            message=summary,
+            detail=detail,
+            parent=root,
+        )
+    elif parsed_files:
+        messagebox.showwarning(
+            title="Parsing completed with errors",
+            message=summary,
+            detail=detail,
+            parent=root,
+        )
+    else:
+        messagebox.showerror(
+            title="Parsing failed",
+            message=summary,
+            detail=detail,
+            parent=root,
+        )
+
     root.destroy()
 
 
-def show_completion_dialog(output_file: Path) -> None:
-    root = Tk()
-    root.withdraw()
-    messagebox.showinfo(
-        title="Parsing complete",
-        message="The mBank transaction history has been parsed successfully.",
-        detail=f"Output file:\n{output_file}",
-        parent=root,
-    )
-    root.destroy()
+def batch_summary_detail(
+    parsed_files: list[ParsedFile],
+    failed_files: list[FailedFile],
+) -> str:
+    detail_sections = []
+
+    if parsed_files:
+        detail_sections.append(
+            "Created outputs:\n"
+            + "\n".join(
+                f"- {parsed_file.output_file}" for parsed_file in parsed_files
+            )
+        )
+
+    if failed_files:
+        detail_sections.append(
+            "Failed files:\n"
+            + "\n".join(
+                f"- {failed_file.input_file}: {format_error(failed_file.error)}"
+                for failed_file in failed_files
+            )
+        )
+
+    return "\n\n".join(detail_sections)
+
+
+def format_error(error: Exception) -> str:
+    error_message = str(error).strip()
+
+    if error_message:
+        return error_message
+
+    return error.__class__.__name__
+
+
+def pluralize(word: str, count: int) -> str:
+    if count == 1:
+        return word
+
+    return f"{word}s"
 
 
 def main() -> None:
-    input_file = select_input_file()
+    input_files = select_input_files()
 
-    if input_file is None:
-        print("No file selected.")
+    if not input_files:
+        print("No files selected.")
         return
 
-    try:
-        rows = read_csv_rows(input_file)
-        output_file = output_file_for(input_file)
-        write_xlsx(rows, output_file)
-    except CsvFormatError as error:
-        show_error_dialog("Invalid mBank CSV", str(error))
-        return
+    parsed_files, failed_files = parse_input_files(input_files)
+    show_batch_summary_dialog(parsed_files, failed_files)
 
-    show_completion_dialog(output_file)
+    print(f"Selected {len(input_files)} {pluralize('file', len(input_files))}.")
 
-    print(f"Selected file: {input_file}")
-    print(f"Wrote {len(rows)} rows to: {output_file}")
+    for parsed_file in parsed_files:
+        print(
+            f"Wrote {parsed_file.row_count} rows from "
+            f"{parsed_file.input_file} to: {parsed_file.output_file}"
+        )
+
+    for failed_file in failed_files:
+        print(f"Failed to parse {failed_file.input_file}: {failed_file.error}")
 
 
 if __name__ == "__main__":
