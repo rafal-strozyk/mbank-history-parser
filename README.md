@@ -48,8 +48,8 @@ The build output is written to `dist/`. On macOS this creates
 
 ## Usage
 
-Running the parser opens a system file picker. Select the mBank CSV file to
-process.
+Running the parser opens a system file picker. Select one or more mBank CSV
+files to process.
 
 For an input file named:
 
@@ -63,9 +63,9 @@ the parser creates:
 history_parsed.xlsx
 ```
 
-The output file is written next to the selected input file.
-After the file is written, the app shows a completion dialog with the output
-file path.
+Each output file is written next to its matching input file.
+After all selected files have been processed, the app shows a summary dialog
+with the created output paths and any files that failed to parse.
 
 ## Expected CSV format
 
