@@ -110,6 +110,19 @@ Rules:
 - Transaction names are trimmed at the first repeated whitespace sequence.
 - Name and date columns are widened automatically in the XLSX output.
 
+## Testing
+
+Run the test suite:
+
+```bash
+uv run python -m unittest discover -s tests
+```
+
+The tests cover CSV parsing, validation errors, transaction transformation,
+XLSX output structure, batch parsing, and dialog summary behavior. They use
+temporary files and mocks for GUI interactions, so they do not open a native
+file picker or require clicking dialogs.
+
 ## Releases
 
 GitHub Actions builds ready-to-run release artifacts for macOS and Windows.
@@ -129,9 +142,10 @@ Files that require a version bump are:
 - `main.py`
 - `pyproject.toml`
 
-The PR check also runs `uv sync --locked --dev`, so `uv.lock` must stay in sync
-with `pyproject.toml`. A lockfile-only fix does not require another version
-bump.
+The PR checks also run `uv sync --locked --dev` and the test suite. The cheaper
+version and lockfile checks run first; tests run after those pass. Keep
+`uv.lock` in sync with `pyproject.toml`. A lockfile-only fix does not require
+another version bump.
 
 If only documentation files such as `README.md` changed, the pull request can be
 merged without a version bump and no release is created.
