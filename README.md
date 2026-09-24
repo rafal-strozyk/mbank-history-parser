@@ -25,6 +25,12 @@ Run the parser:
 uv run python main.py
 ```
 
+Run the tests:
+
+```bash
+uv run python -m unittest discover -s tests
+```
+
 Alternatively, activate the virtual environment manually:
 
 ```bash
