@@ -6,47 +6,35 @@ The program reads an mBank CSV export, skips the export metadata, extracts the
 transaction table, and writes a cleaned XLSX file that is ready to copy into a
 spreadsheet.
 
-## Requirements
+## Contents
 
-- Python 3.14.4 or newer
-- `uv`
-
-## Development setup
-
-Create or sync the project environment:
-
-```bash
-uv sync
-```
-
-Run the parser:
-
-```bash
-uv run python main.py
-```
-
-Alternatively, activate the virtual environment manually:
-
-```bash
-source .venv/bin/activate
-python main.py
-```
-
-Build a local standalone app with PyInstaller:
-
-```bash
-# macOS app bundle
-uv run pyinstaller --noconfirm --clean --windowed --name mbank-history-parser --specpath build main.py
-
-# Windows executable
-uv run pyinstaller --noconfirm --clean --windowed --onefile --name mbank-history-parser --specpath build main.py
-```
-
-The build output is written to `dist/`. On macOS this creates
-`dist/mbank-history-parser.app`; on Windows this creates
-`dist/mbank-history-parser.exe`.
+- [Usage](#usage)
+  - [Download and run](#download-and-run)
+  - [Process CSV files](#process-csv-files)
+  - [macOS security warning](#macos-security-warning)
+- [Input CSV format](#input-csv-format)
+- [Output XLSX format](#output-xlsx-format)
+- [Development](#development)
+  - [Requirements](#requirements)
+  - [Setup and local execution](#setup-and-local-execution)
+  - [Testing](#testing)
+  - [Standalone builds](#standalone-builds)
+- [Releases](#releases)
+  - [Release automation and versioning](#release-automation-and-versioning)
+  - [Published artifacts](#published-artifacts)
 
 ## Usage
+
+### Download and run
+
+Download the archive for your operating system from the
+[latest GitHub release](https://github.com/rafal-strozyk/mbank-history-parser/releases/latest),
+unpack it, and run the app.
+
+- macOS: `mbank-history-parser-macos.zip`
+- Windows: `mbank-history-parser-windows.zip`
+
+### Process CSV files
 
 Running the parser opens a system file picker. Select one or more mBank CSV
 files to process.
@@ -63,11 +51,33 @@ the parser creates:
 history_parsed.xlsx
 ```
 
-Each output file is written next to its matching input file.
-After all selected files have been processed, the app shows a summary dialog
-with the created output paths and any files that failed to parse.
+Each output file is written next to its matching input file. After all selected
+files have been processed, the app shows a summary dialog with the created
+output paths and any files that failed to parse.
 
-## Expected CSV format
+### macOS security warning
+
+The macOS release is not signed or notarized with an Apple Developer ID. Because
+of that, macOS may show a warning that Apple could not verify the app is free of
+malware after you download and unpack the ZIP file.
+
+To allow the downloaded app from Terminal, open the extracted archive directory
+and run:
+
+```bash
+xattr -dr com.apple.quarantine mbank-history-parser.app
+```
+
+If you already tried to open the app and saw the warning, you can also allow it
+from System Settings:
+
+1. Open **System Settings**.
+2. Go to **Privacy & Security**.
+3. Scroll to the bottom.
+4. Click **Open Anyway** for `mbank-history-parser`.
+5. Confirm that you want to open the app.
+
+## Input CSV format
 
 The parser looks for the mBank transaction table header:
 
@@ -78,7 +88,7 @@ The parser looks for the mBank transaction table header:
 Lines before that table are ignored. If the transaction table or any required
 column is missing, the app shows an error dialog.
 
-## Output format
+## Output XLSX format
 
 Transactions are grouped into separate worksheets by month. Worksheet names use
 Polish month names:
@@ -110,7 +120,35 @@ Rules:
 - Transaction names are trimmed at the first repeated whitespace sequence.
 - Name and date columns are widened automatically in the XLSX output.
 
-## Testing
+## Development
+
+### Requirements
+
+- Python 3.14.4 or newer
+- `uv`
+
+### Setup and local execution
+
+Create or sync the project environment:
+
+```bash
+uv sync
+```
+
+Run the parser:
+
+```bash
+uv run python main.py
+```
+
+Alternatively, activate the virtual environment manually:
+
+```bash
+source .venv/bin/activate
+python main.py
+```
+
+### Testing
 
 Run the test suite:
 
@@ -123,7 +161,25 @@ XLSX output structure, batch parsing, and dialog summary behavior. They use
 temporary files and mocks for GUI interactions, so they do not open a native
 file picker or require clicking dialogs.
 
+### Standalone builds
+
+Build a local standalone app with PyInstaller:
+
+```bash
+# macOS app bundle
+uv run pyinstaller --noconfirm --clean --windowed --name mbank-history-parser --specpath build main.py
+
+# Windows executable
+uv run pyinstaller --noconfirm --clean --windowed --onefile --name mbank-history-parser --specpath build main.py
+```
+
+The build output is written to `dist/`. On macOS this creates
+`dist/mbank-history-parser.app`; on Windows this creates
+`dist/mbank-history-parser.exe`.
+
 ## Releases
+
+### Release automation and versioning
 
 GitHub Actions builds ready-to-run release artifacts for macOS and Windows.
 Releases are created automatically after a pull request is merged into `main`,
@@ -150,34 +206,11 @@ another version bump.
 If only documentation files such as `README.md` changed, the pull request can be
 merged without a version bump and no release is created.
 
+### Published artifacts
+
 Each release uploads:
 
 - `mbank-history-parser-macos.zip` containing the macOS app bundle.
 - `mbank-history-parser-windows.zip` containing the Windows executable.
 
-GitHub displays SHA-256 digests for release assets in the release page.
-
-Download the archive for your operating system, unpack it, and run the app.
-The app opens the same file picker as the development version and writes the
-`*_parsed.xlsx` file next to the selected CSV file.
-
-### macOS security warning
-
-The macOS release is not signed or notarized with an Apple Developer ID. Because
-of that, macOS may show a warning that Apple could not verify the app is free of
-malware after you download and unpack the ZIP file.
-
-To allow the downloaded app from Terminal, run:
-
-```bash
-xattr -dr com.apple.quarantine dist/mbank-history-parser.app
-```
-
-If you already tried to open the app and saw the warning, you can also allow it
-from System Settings:
-
-1. Open **System Settings**.
-2. Go to **Privacy & Security**.
-3. Scroll to the bottom.
-4. Click **Open Anyway** for `mbank-history-parser`.
-5. Confirm that you want to open the app.
+GitHub displays SHA-256 digests for release assets on the release page.
