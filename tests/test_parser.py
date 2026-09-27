@@ -175,10 +175,18 @@ class TransactionTransformationTest(unittest.TestCase):
         )
         self.assertEqual(main.format_amount(Decimal("-1234.5")), "1234,50")
 
-    def test_transaction_name_cleanup_trims_at_repeated_whitespace(self) -> None:
+    def test_transaction_name_cleanup_replaces_repeated_whitespace_with_newlines(
+        self,
+    ) -> None:
         self.assertEqual(
             main.format_transaction_name("  Grocery store    CARD PAYMENT  "),
-            "Grocery store",
+            "Grocery store\nCARD PAYMENT",
+        )
+        self.assertEqual(
+            main.format_transaction_name(
+                "  Grocery store    CARD PAYMENT  REFERENCE 123  "
+            ),
+            "Grocery store\nCARD PAYMENT\nREFERENCE 123",
         )
         self.assertEqual(
             main.format_transaction_name("Single spaces stay"),
@@ -228,7 +236,9 @@ class XlsxOutputTest(unittest.TestCase):
             self.assertEqual(april["A6"].value, "Kawiarnia")
             self.assertEqual(april["B6"].value, "10,00")
             self.assertEqual(april["C6"].value, "09.04.2026")
-            self.assertEqual(april["A7"].value, "Sklep spozywczy")
+            self.assertEqual(april["A7"].value, "Sklep spozywczy\nKARTA")
+            self.assertTrue(april["A7"].alignment.wrap_text)
+            self.assertEqual(april["A7"].alignment.vertical, "top")
             self.assertEqual(april["B7"].value, "309,79")
             self.assertEqual(april["C7"].value, "11.04.2026")
             self.assertEqual(april["E4"].value, "returns")
