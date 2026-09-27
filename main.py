@@ -11,7 +11,7 @@ from tkinter import Tk, filedialog, messagebox
 
 from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
-from openpyxl.styles import Font
+from openpyxl.styles import Alignment, Font
 
 
 ENCODINGS_TO_TRY = ("utf-8-sig", "utf-8", "cp1250", "iso-8859-2")
@@ -277,11 +277,12 @@ def write_transaction_table(
     current_row = header_row + 1
 
     for transaction in transactions:
-        sheet.cell(
+        name_cell = sheet.cell(
             row=current_row,
             column=start_column + OUTPUT_NAME_COLUMN_OFFSET,
             value=format_transaction_name(transaction[column_indexes.name]),
         )
+        name_cell.alignment = Alignment(wrap_text=True, vertical="top")
         sheet.cell(
             row=current_row,
             column=start_column + OUTPUT_AMOUNT_COLUMN_OFFSET,
@@ -301,7 +302,7 @@ def adjust_output_column_widths(sheet) -> None:
     for column_index in output_columns_to_autofit():
         column_letter = get_column_letter(column_index)
         max_value_length = max(
-            len(str(cell.value))
+            max(len(line) for line in str(cell.value).splitlines())
             for cell in sheet[column_letter]
             if cell.value is not None
         )
@@ -366,15 +367,7 @@ def format_date(transaction_date: str) -> str:
 
 
 def format_transaction_name(transaction_name: str) -> str:
-    stripped_transaction_name = transaction_name.strip()
-    repeated_whitespace_match = REPEATED_WHITESPACE_PATTERN.search(
-        stripped_transaction_name
-    )
-
-    if repeated_whitespace_match is None:
-        return stripped_transaction_name
-
-    return stripped_transaction_name[: repeated_whitespace_match.start()]
+    return REPEATED_WHITESPACE_PATTERN.sub("\n", transaction_name.strip())
 
 
 def group_transactions_by_month(

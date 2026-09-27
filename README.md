@@ -117,7 +117,8 @@ Rules:
 - Amounts are output as positive values in both tables.
 - Amounts use a comma decimal separator, for example `309,79`.
 - Dates use `DD.MM.YYYY`, for example `11.04.2026`.
-- Transaction names are trimmed at the first repeated whitespace sequence.
+- Repeated whitespace sequences in transaction names are replaced with line
+  breaks so all transaction details remain visible.
 - Name and date columns are widened automatically in the XLSX output.
 
 ## Development
