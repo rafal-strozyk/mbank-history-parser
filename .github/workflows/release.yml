@@ -145,7 +145,9 @@ jobs:
               assert sheet["A2"].value == "309,79"
               assert sheet["E1"].value == "sum returns"
               assert sheet["E2"].value == "50,00"
-              assert sheet["A6"].value == "Sklep spozywczy"
+              assert sheet["A6"].value == "Sklep spozywczy\nKARTA"
+              assert sheet["A6"].alignment.wrap_text is True
+              assert sheet["A6"].alignment.vertical == "top"
               assert sheet["B6"].value == "309,79"
               assert sheet["C6"].value == "11.04.2026"
               assert sheet["E6"].value == "Zwrot"
